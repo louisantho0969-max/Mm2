@@ -1,0 +1,296 @@
+-- // Universal Tracer + Aimbot + Auto Shoot Murder (MM2) - Delta Lua
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local TracersEnabled = false
+local AimbotEnabled = false
+local AutoShootEnabled = false
+local Connections = {}
+local Lines = {}
+
+-- ==================== DÉTECTION RÔLES MM2 ====================
+local function GetPlayerRole(player)
+    if game.PlaceId ~= 142823291 then return "Default" end
+    
+    local char = player.Character
+    if not char then return "Default" end
+    
+    local backpack = player:FindFirstChild("Backpack")
+    
+    if (backpack and backpack:FindFirstChild("Knife")) or char:FindFirstChild("Knife") then
+        return "Murderer"
+    end
+    if (backpack and backpack:FindFirstChild("Gun")) or char:FindFirstChild("Gun") then
+        return "Sheriff"
+    end
+    return "Innocent"
+end
+
+local function GetMurderer()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if GetPlayerRole(player) == "Murderer" then
+            return player
+        end
+    end
+    return nil
+end
+
+-- ==================== CRÉATION DU MENU ====================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UniversalCheatGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 190, 0, 175)
+MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- Bouton Tracer
+local TracerButton = Instance.new("TextButton")
+TracerButton.Size = UDim2.new(1, -10, 0, 45)
+TracerButton.Position = UDim2.new(0, 5, 0, 5)
+TracerButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+TracerButton.Text = "Tracer: OFF"
+TracerButton.TextColor3 = Color3.new(1, 1, 1)
+TracerButton.TextScaled = true
+TracerButton.Font = Enum.Font.GothamBold
+TracerButton.Parent = MainFrame
+
+-- Bouton Aimbot
+local AimbotButton = Instance.new("TextButton")
+AimbotButton.Size = UDim2.new(1, -10, 0, 45)
+AimbotButton.Position = UDim2.new(0, 5, 0, 55)
+AimbotButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+AimbotButton.Text = "Aimbot: OFF"
+AimbotButton.TextColor3 = Color3.new(1, 1, 1)
+AimbotButton.TextScaled = true
+AimbotButton.Font = Enum.Font.GothamBold
+AimbotButton.Parent = MainFrame
+
+-- Bouton Auto Shoot Murder
+local AutoShootButton = Instance.new("TextButton")
+AutoShootButton.Size = UDim2.new(1, -10, 0, 45)
+AutoShootButton.Position = UDim2.new(0, 5, 0, 105)
+AutoShootButton.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+AutoShootButton.Text = "Auto Shoot: OFF"
+AutoShootButton.TextColor3 = Color3.new(1, 1, 1)
+AutoShootButton.TextScaled = true
+AutoShootButton.Font = Enum.Font.GothamBold
+AutoShootButton.Parent = MainFrame
+
+for _, btn in pairs({TracerButton, AimbotButton, AutoShootButton}) do
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+end
+
+-- ==================== ESP / TRACERS ====================
+local function UpdateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer or not player.Character then continue end
+        
+        local character = player.Character
+        local root = character:FindFirstChild("HumanoidRootPart")
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not root or not myRoot then continue end
+
+        local role = GetPlayerRole(player)
+        local color = Color3.fromRGB(0, 255, 0)
+        if role == "Murderer" then color = Color3.fromRGB(255, 0, 0)
+        elseif role == "Sheriff" then color = Color3.fromRGB(0, 100, 255) end
+
+        local highlight = character:FindFirstChild("TracerHighlight")
+        if not highlight then
+            highlight = Instance.new("Highlight")
+            highlight.Name = "TracerHighlight"
+            highlight.FillTransparency = 0.4
+            highlight.OutlineTransparency = 0
+            highlight.Parent = character
+        end
+        highlight.FillColor = color
+        highlight.OutlineColor = color
+
+        if not Lines[player] then
+            Lines[player] = Drawing.new("Line")
+            Lines[player].Thickness = 2
+            Lines[player].Transparency = 1
+        end
+
+        local line = Lines[player]
+        local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+        local myScreenPos = Camera:WorldToViewportPoint(myRoot.Position)
+
+        line.Color = color
+        line.From = Vector2.new(myScreenPos.X, myScreenPos.Y)
+        line.To = Vector2.new(screenPos.X, screenPos.Y)
+        line.Visible = onScreen
+    end
+end
+
+local function DisableTracers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            local hl = player.Character:FindFirstChild("TracerHighlight")
+            if hl then hl:Destroy() end
+        end
+    end
+    for _, line in pairs(Lines) do line:Remove() end
+    Lines = {}
+end
+
+-- ==================== AIMBOT ====================
+local function GetClosestPlayer()
+    local closest, shortest = nil, math.huge
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                local dist = (myRoot.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                if dist < shortest then
+                    shortest = dist
+                    closest = player
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function AimbotLoop()
+    if not AimbotEnabled then return end
+    local target = GetClosestPlayer()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
+    end
+end
+
+-- ==================== AUTO SHOOT MURDER (avec check murs) ====================
+local function HasLineOfSight(fromPos, toPos)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    
+    local result = workspace:Raycast(fromPos, (toPos - fromPos), rayParams)
+    if result then
+        -- Si on touche quelque chose avant le Murder → mur
+        local murder = GetMurderer()
+        if murder and murder.Character and result.Instance:IsDescendantOf(murder.Character) then
+            return true
+        end
+        return false
+    end
+    return true
+end
+
+local function AutoShootLoop()
+    if not AutoShootEnabled then return end
+    if game.PlaceId ~= 142823291 then return end
+
+    local murder = GetMurderer()
+    if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then return end
+
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+
+    local gun = myChar:FindFirstChild("Gun") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun"))
+    if not gun then return end
+
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local murderRoot = murder.Character.HumanoidRootPart
+    if not myRoot then return end
+
+    -- Vérifie qu'il n'y a pas de mur entre toi et le Murder
+    if HasLineOfSight(myRoot.Position, murderRoot.Position) then
+        -- Lock la caméra sur le Murder
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, murderRoot.Position)
+
+        -- Active le gun s'il n'est pas équipé
+        if gun.Parent == LocalPlayer.Backpack then
+            myChar.Humanoid:EquipTool(gun)
+        end
+
+        -- Tire (Active le tool)
+        gun:Activate()
+    end
+end
+
+-- ==================== TOGGLES ====================
+local function ToggleTracers()
+    TracersEnabled = not TracersEnabled
+    if TracersEnabled then
+        Connections.Render = RunService.RenderStepped:Connect(UpdateESP)
+        TracerButton.Text = "Tracer: ON"
+        TracerButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        if Connections.Render then Connections.Render:Disconnect() end
+        DisableTracers()
+        TracerButton.Text = "Tracer: OFF"
+        TracerButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    end
+end
+
+local function ToggleAimbot()
+    AimbotEnabled = not AimbotEnabled
+    if AimbotEnabled then
+        Connections.Aimbot = RunService.RenderStepped:Connect(AimbotLoop)
+        AimbotButton.Text = "Aimbot: ON"
+        AimbotButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    else
+        if Connections.Aimbot then Connections.Aimbot:Disconnect() end
+        AimbotButton.Text = "Aimbot: OFF"
+        AimbotButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+    end
+end
+
+local function ToggleAutoShoot()
+    AutoShootEnabled = not AutoShootEnabled
+    if AutoShootEnabled then
+        Connections.AutoShoot = RunService.Heartbeat:Connect(AutoShootLoop)
+        AutoShootButton.Text = "Auto Shoot: ON"
+        AutoShootButton.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
+        print("✅ Auto Shoot Murder activé (ne traverse pas les murs)")
+    else
+        if Connections.AutoShoot then Connections.AutoShoot:Disconnect() end
+        AutoShootButton.Text = "Auto Shoot: OFF"
+        AutoShootButton.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+        print("❌ Auto Shoot désactivé")
+    end
+end
+
+TracerButton.MouseButton1Click:Connect(ToggleTracers)
+AimbotButton.MouseButton1Click:Connect(ToggleAimbot)
+AutoShootButton.MouseButton1Click:Connect(ToggleAutoShoot)
+
+-- Drag
+local dragging, dragStart, startPos = false, nil, nil
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+MainFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+print("🎉 Menu chargé : Tracer + Aimbot + Auto Shoot Murder")
