@@ -1,23 +1,84 @@
--- // Universal Tracer + Aimbot + Auto Shoot Murder (MM2) - Delta Lua
+-- // Universal MM2 Script - Boutons séparés + Lock + Style
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+-- ==================== CHARGEMENT (10 secondes) ====================
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "LoadingScreen"
+LoadingGui.IgnoreGuiInset = true
+LoadingGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Size = UDim2.new(1, 0, 1, 0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+LoadingFrame.Parent = LoadingGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 60)
+Title.Position = UDim2.new(0, 0, 0.35, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "UNIVERSAL MM2"
+Title.TextColor3 = Color3.fromRGB(0, 255, 180)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBlack
+Title.Parent = LoadingFrame
+
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Size = UDim2.new(1, 0, 0, 30)
+SubTitle.Position = UDim2.new(0, 0, 0.45, 0)
+SubTitle.BackgroundTransparency = 1
+SubTitle.Text = "Chargement en cours..."
+SubTitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+SubTitle.TextScaled = true
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.Parent = LoadingFrame
+
+local BarBackground = Instance.new("Frame")
+BarBackground.Size = UDim2.new(0.4, 0, 0, 12)
+BarBackground.Position = UDim2.new(0.3, 0, 0.55, 0)
+BarBackground.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+BarBackground.BorderSizePixel = 0
+BarBackground.Parent = LoadingFrame
+
+local BarCorner = Instance.new("UICorner")
+BarCorner.CornerRadius = UDim.new(1, 0)
+BarCorner.Parent = BarBackground
+
+local Bar = Instance.new("Frame")
+Bar.Size = UDim2.new(0, 0, 1, 0)
+Bar.BackgroundColor3 = Color3.fromRGB(0, 255, 180)
+Bar.BorderSizePixel = 0
+Bar.Parent = BarBackground
+
+local BarCorner2 = Instance.new("UICorner")
+BarCorner2.CornerRadius = UDim.new(1, 0)
+BarCorner2.Parent = Bar
+
+-- Animation de la barre (10 secondes)
+TweenService:Create(Bar, TweenInfo.new(10, Enum.EasingStyle.Quad), {
+    Size = UDim2.new(1, 0, 1, 0)
+}):Play()
+
+task.wait(10)
+LoadingGui:Destroy()
+
+-- ==================== VARIABLES ====================
 local TracersEnabled = false
 local AimbotEnabled = false
-local AutoShootEnabled = false
+local Locked = false
 local Connections = {}
 local Lines = {}
+local Buttons = {}
 
--- ==================== DÉTECTION RÔLES MM2 ====================
+-- ==================== FONCTIONS UTILES ====================
 local function GetPlayerRole(player)
     if game.PlaceId ~= 142823291 then return "Default" end
-    
     local char = player.Character
     if not char then return "Default" end
-    
     local backpack = player:FindFirstChild("Backpack")
     
     if (backpack and backpack:FindFirstChild("Knife")) or char:FindFirstChild("Knife") then
@@ -38,61 +99,81 @@ local function GetMurderer()
     return nil
 end
 
--- ==================== CRÉATION DU MENU ====================
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "UniversalCheatGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 190, 0, 175)
-MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.Parent = ScreenGui
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
-
--- Bouton Tracer
-local TracerButton = Instance.new("TextButton")
-TracerButton.Size = UDim2.new(1, -10, 0, 45)
-TracerButton.Position = UDim2.new(0, 5, 0, 5)
-TracerButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-TracerButton.Text = "Tracer: OFF"
-TracerButton.TextColor3 = Color3.new(1, 1, 1)
-TracerButton.TextScaled = true
-TracerButton.Font = Enum.Font.GothamBold
-TracerButton.Parent = MainFrame
-
--- Bouton Aimbot
-local AimbotButton = Instance.new("TextButton")
-AimbotButton.Size = UDim2.new(1, -10, 0, 45)
-AimbotButton.Position = UDim2.new(0, 5, 0, 55)
-AimbotButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-AimbotButton.Text = "Aimbot: OFF"
-AimbotButton.TextColor3 = Color3.new(1, 1, 1)
-AimbotButton.TextScaled = true
-AimbotButton.Font = Enum.Font.GothamBold
-AimbotButton.Parent = MainFrame
-
--- Bouton Auto Shoot Murder
-local AutoShootButton = Instance.new("TextButton")
-AutoShootButton.Size = UDim2.new(1, -10, 0, 45)
-AutoShootButton.Position = UDim2.new(0, 5, 0, 105)
-AutoShootButton.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-AutoShootButton.Text = "Auto Shoot: OFF"
-AutoShootButton.TextColor3 = Color3.new(1, 1, 1)
-AutoShootButton.TextScaled = true
-AutoShootButton.Font = Enum.Font.GothamBold
-AutoShootButton.Parent = MainFrame
-
-for _, btn in pairs({TracerButton, AimbotButton, AutoShootButton}) do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
+local function HasLineOfSight(fromPos, toPos)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    
+    local result = workspace:Raycast(fromPos, (toPos - fromPos), params)
+    if result then
+        local murder = GetMurderer()
+        if murder and murder.Character and result.Instance:IsDescendantOf(murder.Character) then
+            return true
+        end
+        return false
+    end
+    return true
 end
+
+-- ==================== CRÉATION DES BOUTONS SÉPARÉS ====================
+local function CreateButton(name, text, color, position)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(0, 160, 0, 48)
+    btn.Position = position
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = false
+    btn.Parent = LocalPlayer.PlayerGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.7
+    stroke.Parent = btn
+
+    -- Drag individuel
+    local dragging = false
+    local dragStart, startPos
+
+    btn.InputBegan:Connect(function(input)
+        if Locked then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = btn.Position
+        end
+    end)
+
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and not Locked and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    table.insert(Buttons, btn)
+    return btn
+end
+
+-- Création des 4 boutons
+local TracerBtn = CreateButton("TracerBtn", "TRACER : OFF", Color3.fromRGB(0, 200, 120), UDim2.new(0.02, 0, 0.25, 0))
+local AimbotBtn = CreateButton("AimbotBtn", "AIMBOT : OFF", Color3.fromRGB(220, 50, 50), UDim2.new(0.02, 0, 0.35, 0))
+local AutoShootBtn = CreateButton("AutoShootBtn", "AUTO SHOOT", Color3.fromRGB(255, 140, 0), UDim2.new(0.02, 0, 0.45, 0))
+local LockBtn = CreateButton("LockBtn", "LOCK : OFF", Color3.fromRGB(80, 80, 120), UDim2.new(0.02, 0, 0.55, 0))
 
 -- ==================== ESP / TRACERS ====================
 local function UpdateESP()
@@ -105,15 +186,15 @@ local function UpdateESP()
         if not root or not myRoot then continue end
 
         local role = GetPlayerRole(player)
-        local color = Color3.fromRGB(0, 255, 0)
-        if role == "Murderer" then color = Color3.fromRGB(255, 0, 0)
-        elseif role == "Sheriff" then color = Color3.fromRGB(0, 100, 255) end
+        local color = Color3.fromRGB(0, 255, 100)
+        if role == "Murderer" then color = Color3.fromRGB(255, 40, 40)
+        elseif role == "Sheriff" then color = Color3.fromRGB(50, 120, 255) end
 
         local highlight = character:FindFirstChild("TracerHighlight")
         if not highlight then
             highlight = Instance.new("Highlight")
             highlight.Name = "TracerHighlight"
-            highlight.FillTransparency = 0.4
+            highlight.FillTransparency = 0.45
             highlight.OutlineTransparency = 0
             highlight.Parent = character
         end
@@ -148,149 +229,105 @@ local function DisableTracers()
     Lines = {}
 end
 
--- ==================== AIMBOT ====================
-local function GetClosestPlayer()
-    local closest, shortest = nil, math.huge
-    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hum = player.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local dist = (myRoot.Position - player.Character.HumanoidRootPart.Position).Magnitude
-                if dist < shortest then
-                    shortest = dist
-                    closest = player
-                end
-            end
-        end
-    end
-    return closest
-end
-
+-- ==================== AIMBOT (seulement Murder + LOS) ====================
 local function AimbotLoop()
     if not AimbotEnabled then return end
-    local target = GetClosestPlayer()
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
-    end
-end
-
--- ==================== AUTO SHOOT MURDER (avec check murs) ====================
-local function HasLineOfSight(fromPos, toPos)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
     
-    local result = workspace:Raycast(fromPos, (toPos - fromPos), rayParams)
-    if result then
-        -- Si on touche quelque chose avant le Murder → mur
-        local murder = GetMurderer()
-        if murder and murder.Character and result.Instance:IsDescendantOf(murder.Character) then
-            return true
-        end
-        return false
-    end
-    return true
-end
-
-local function AutoShootLoop()
-    if not AutoShootEnabled then return end
-    if game.PlaceId ~= 142823291 then return end
-
     local murder = GetMurderer()
     if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local murderRoot = murder.Character.HumanoidRootPart
+    
+    if HasLineOfSight(myRoot.Position, murderRoot.Position) then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, murderRoot.Position)
+    end
+end
 
+-- ==================== AUTO SHOOT (un seul appui) ====================
+local function DoAutoShoot()
+    if game.PlaceId ~= 142823291 then return end
+    
+    local murder = GetMurderer()
+    if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
     local myChar = LocalPlayer.Character
     if not myChar then return end
-
+    
     local gun = myChar:FindFirstChild("Gun") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun"))
     if not gun then return end
-
+    
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     local murderRoot = murder.Character.HumanoidRootPart
     if not myRoot then return end
-
-    -- Vérifie qu'il n'y a pas de mur entre toi et le Murder
+    
     if HasLineOfSight(myRoot.Position, murderRoot.Position) then
-        -- Lock la caméra sur le Murder
+        -- Aim rapide
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, murderRoot.Position)
-
-        -- Active le gun s'il n'est pas équipé
+        
         if gun.Parent == LocalPlayer.Backpack then
             myChar.Humanoid:EquipTool(gun)
+            task.wait(0.05)
         end
-
-        -- Tire (Active le tool)
+        
         gun:Activate()
     end
 end
 
--- ==================== TOGGLES ====================
-local function ToggleTracers()
+-- ==================== CONNEXIONS DES BOUTONS ====================
+TracerBtn.MouseButton1Click:Connect(function()
     TracersEnabled = not TracersEnabled
     if TracersEnabled then
         Connections.Render = RunService.RenderStepped:Connect(UpdateESP)
-        TracerButton.Text = "Tracer: ON"
-        TracerButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        TracerBtn.Text = "TRACER : ON"
+        TracerBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
     else
         if Connections.Render then Connections.Render:Disconnect() end
         DisableTracers()
-        TracerButton.Text = "Tracer: OFF"
-        TracerButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        TracerBtn.Text = "TRACER : OFF"
+        TracerBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 120)
     end
-end
+end)
 
-local function ToggleAimbot()
+AimbotBtn.MouseButton1Click:Connect(function()
     AimbotEnabled = not AimbotEnabled
     if AimbotEnabled then
         Connections.Aimbot = RunService.RenderStepped:Connect(AimbotLoop)
-        AimbotButton.Text = "Aimbot: ON"
-        AimbotButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        AimbotBtn.Text = "AIMBOT : ON"
+        AimbotBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
     else
         if Connections.Aimbot then Connections.Aimbot:Disconnect() end
-        AimbotButton.Text = "Aimbot: OFF"
-        AimbotButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        AimbotBtn.Text = "AIMBOT : OFF"
+        AimbotBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
     end
-end
+end)
 
-local function ToggleAutoShoot()
-    AutoShootEnabled = not AutoShootEnabled
-    if AutoShootEnabled then
-        Connections.AutoShoot = RunService.Heartbeat:Connect(AutoShootLoop)
-        AutoShootButton.Text = "Auto Shoot: ON"
-        AutoShootButton.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
-        print("✅ Auto Shoot Murder activé (ne traverse pas les murs)")
+AutoShootBtn.MouseButton1Click:Connect(function()
+    -- Effet visuel
+    local oldColor = AutoShootBtn.BackgroundColor3
+    AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+    AutoShootBtn.Text = "SHOT !"
+    
+    DoAutoShoot()
+    
+    task.wait(0.4)
+    AutoShootBtn.BackgroundColor3 = oldColor
+    AutoShootBtn.Text = "AUTO SHOOT"
+end)
+
+LockBtn.MouseButton1Click:Connect(function()
+    Locked = not Locked
+    if Locked then
+        LockBtn.Text = "LOCK : ON"
+        LockBtn.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
     else
-        if Connections.AutoShoot then Connections.AutoShoot:Disconnect() end
-        AutoShootButton.Text = "Auto Shoot: OFF"
-        AutoShootButton.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-        print("❌ Auto Shoot désactivé")
-    end
-end
-
-TracerButton.MouseButton1Click:Connect(ToggleTracers)
-AimbotButton.MouseButton1Click:Connect(ToggleAimbot)
-AutoShootButton.MouseButton1Click:Connect(ToggleAutoShoot)
-
--- Drag
-local dragging, dragStart, startPos = false, nil, nil
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-    end
-end)
-MainFrame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        LockBtn.Text = "LOCK : OFF"
+        LockBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
     end
 end)
 
-print("🎉 Menu chargé : Tracer + Aimbot + Auto Shoot Murder")
+print("Script chargé avec succès.")
