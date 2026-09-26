@@ -1,4 +1,4 @@
--- // MM2 - Auto Shoot + ESP (Script propre)
+-- // MM2 - Auto Shoot + ESP (Version corrigée)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,18 +7,79 @@ local Camera = workspace.CurrentCamera
 
 local ESPEnabled = false
 local Connections = {}
-local Highlights = {}
 
--- ==================== DÉTECTION DES RÔLES ====================
+-- ==================== SCREEN GUI ====================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MM2Script"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ==================== FONCTION CRÉATION BOUTON ====================
+local function CreateButton(text, color, position)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 170, 0, 52)
+    btn.Position = position
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = false
+    btn.Parent = ScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.6
+    stroke.Parent = btn
+
+    -- Drag
+    local dragging = false
+    local dragStart, startPos
+
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = btn.Position
+        end
+    end)
+
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    return btn
+end
+
+local AutoShootBtn = CreateButton("AUTO SHOOT", Color3.fromRGB(255, 140, 0), UDim2.new(0.02, 0, 0.32, 0))
+local ESPBtn = CreateButton("ESP : OFF", Color3.fromRGB(0, 180, 100), UDim2.new(0.02, 0, 0.42, 0))
+
+-- ==================== DÉTECTION RÔLE ====================
 local function GetRole(player)
-    if not player.Character then return "Innocent" end
-    
+    if not player or not player.Character then return "Innocent" end
+
     local char = player.Character
     local backpack = player:FindFirstChild("Backpack")
-    
-    if (backpack and backpack:FindFirstChild("Knife")) or char:FindFirstChild("Knife") then
+
+    if char:FindFirstChild("Knife") or (backpack and backpack:FindFirstChild("Knife")) then
         return "Murderer"
-    elseif (backpack and backpack:FindFirstChild("Gun")) or char:FindFirstChild("Gun") then
+    end
+    if char:FindFirstChild("Gun") or (backpack and backpack:FindFirstChild("Gun")) then
         return "Sheriff"
     end
     return "Innocent"
@@ -33,123 +94,78 @@ local function GetMurderer()
     return nil
 end
 
--- ==================== CRÉATION DES BOUTONS ====================
-local function CreateButton(name, text, color, posY)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(0, 160, 0, 50)
-    btn.Position = UDim2.new(0.02, 0, posY, 0)
-    btn.BackgroundColor3 = color
-    btn.Text = text
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
-    btn.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = btn
-    
-    -- Drag
-    local dragging = false
-    local dragStart, startPos
-    
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = btn.Position
-        end
-    end)
-    
-    btn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    
-    return btn
-end
-
-local AutoShootBtn = CreateButton("AutoShoot", "AUTO SHOOT", Color3.fromRGB(255, 140, 0), 0.3)
-local ESPBtn = CreateButton("ESP", "ESP : OFF", Color3.fromRGB(0, 180, 100), 0.4)
-
 -- ==================== AUTO SHOOT ====================
 local function AutoShoot()
-    -- Vérifie si tu es Sheriff
     if GetRole(LocalPlayer) ~= "Sheriff" then
-        AutoShootBtn.Text = "PAS SHERIFF"
-        task.wait(0.8)
-        AutoShootBtn.Text = "AUTO SHOOT"
+        AutoShootBtn.Text = "PAS SHERIFF !"
+        task.delay(1, function()
+            AutoShootBtn.Text = "AUTO SHOOT"
+        end)
         return
     end
-    
+
     local murder = GetMurderer()
     if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then
         AutoShootBtn.Text = "PAS DE MURDER"
-        task.wait(0.8)
-        AutoShootBtn.Text = "AUTO SHOOT"
+        task.delay(1, function()
+            AutoShootBtn.Text = "AUTO SHOOT"
+        end)
         return
     end
-    
-    local myChar = LocalPlayer.Character
-    if not myChar then return end
-    
-    local gun = myChar:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
-    if not gun then return end
-    
-    -- Aim sur le Murder
+
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local gun = character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+
+    if not gun or not humanoid then return end
+
+    -- Vise le Murder
     Camera.CFrame = CFrame.new(Camera.CFrame.Position, murder.Character.HumanoidRootPart.Position)
-    
-    -- Équipe le gun si besoin
-    if gun.Parent == LocalPlayer.Backpack then
-        myChar.Humanoid:EquipTool(gun)
-        task.wait(0.05)
+
+    -- Équipe le gun
+    if gun.Parent ~= character then
+        humanoid:EquipTool(gun)
+        task.wait(0.08)
     end
-    
+
     -- Tire
     gun:Activate()
-    
-    -- Feedback visuel
+
+    -- Feedback
     AutoShootBtn.Text = "SHOT !"
-    AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 0)
-    task.wait(0.5)
-    AutoShootBtn.Text = "AUTO SHOOT"
-    AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+    AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 0)
+    task.delay(0.6, function()
+        AutoShootBtn.Text = "AUTO SHOOT"
+        AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+    end)
 end
 
 -- ==================== ESP ====================
 local function UpdateESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer or not player.Character then continue end
-        
+
         local role = GetRole(player)
-        local color
-        
+        local color = Color3.fromRGB(40, 255, 90) -- Vert (Innocent)
+
         if role == "Murderer" then
-            color = Color3.fromRGB(255, 30, 30)      -- Rouge
+            color = Color3.fromRGB(255, 40, 40) -- Rouge
         elseif role == "Sheriff" then
-            color = Color3.fromRGB(30, 100, 255)     -- Bleu
-        else
-            color = Color3.fromRGB(30, 255, 80)      -- Vert
+            color = Color3.fromRGB(40, 110, 255) -- Bleu
         end
-        
+
         local highlight = player.Character:FindFirstChild("RoleESP")
         if not highlight then
             highlight = Instance.new("Highlight")
             highlight.Name = "RoleESP"
-            highlight.FillTransparency = 0.4
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.FillTransparency = 0.45
             highlight.OutlineTransparency = 0
             highlight.Parent = player.Character
         end
-        
+
         highlight.FillColor = color
         highlight.OutlineColor = color
         highlight.Enabled = true
@@ -160,7 +176,9 @@ local function ClearESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player.Character then
             local hl = player.Character:FindFirstChild("RoleESP")
-            if hl then hl:Destroy() end
+            if hl then
+                hl:Destroy()
+            end
         end
     end
 end
@@ -170,14 +188,16 @@ AutoShootBtn.MouseButton1Click:Connect(AutoShoot)
 
 ESPBtn.MouseButton1Click:Connect(function()
     ESPEnabled = not ESPEnabled
-    
+
     if ESPEnabled then
+        if Connections.ESP then Connections.ESP:Disconnect() end
         Connections.ESP = RunService.RenderStepped:Connect(UpdateESP)
         ESPBtn.Text = "ESP : ON"
-        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 130)
     else
         if Connections.ESP then
             Connections.ESP:Disconnect()
+            Connections.ESP = nil
         end
         ClearESP()
         ESPBtn.Text = "ESP : OFF"
@@ -185,4 +205,4 @@ ESPBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-print("Script chargé - Auto Shoot + ESP")
+print("✅ Script MM2 chargé correctement")
