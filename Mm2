@@ -1,41 +1,45 @@
--- // MM2 - Auto Shoot + ESP (Version corrigée)
+-- // MM2 Script - Style Hacker (Auto Shoot + ESP + Auto Grab + Lock)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local PathfindingService = game:GetService("PathfindingService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local ESPEnabled = false
+local AutoShootEnabled = false
+local Locked = false
 local Connections = {}
+local Buttons = {}
 
 -- ==================== SCREEN GUI ====================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MM2Script"
+ScreenGui.Name = "MM2Hacker"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- ==================== FONCTION CRÉATION BOUTON ====================
-local function CreateButton(text, color, position)
+-- ==================== CRÉATION BOUTON STYLE HACKER ====================
+local function CreateButton(text, position)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 170, 0, 52)
+    btn.Size = UDim2.new(0, 180, 0, 48)
     btn.Position = position
-    btn.BackgroundColor3 = color
+    btn.BackgroundColor3 = Color3.fromRGB(8, 12, 18)
     btn.Text = text
-    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextColor3 = Color3.fromRGB(0, 255, 170)
     btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
+    btn.Font = Enum.Font.Code
     btn.AutoButtonColor = false
     btn.Parent = ScreenGui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
+    corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = btn
 
     local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 1.5
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.6
+    stroke.Color = Color3.fromRGB(0, 255, 170)
+    stroke.Thickness = 1.4
+    stroke.Transparency = 0.3
     stroke.Parent = btn
 
     -- Drag
@@ -43,6 +47,7 @@ local function CreateButton(text, color, position)
     local dragStart, startPos
 
     btn.InputBegan:Connect(function(input)
+        if Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -57,22 +62,24 @@ local function CreateButton(text, color, position)
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragging and not Locked and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 
+    table.insert(Buttons, btn)
     return btn
 end
 
-local AutoShootBtn = CreateButton("AUTO SHOOT", Color3.fromRGB(255, 140, 0), UDim2.new(0.02, 0, 0.32, 0))
-local ESPBtn = CreateButton("ESP : OFF", Color3.fromRGB(0, 180, 100), UDim2.new(0.02, 0, 0.42, 0))
+local AutoShootBtn = CreateButton("[ AUTO SHOOT ]", UDim2.new(0.02, 0, 0.28, 0))
+local ESPBtn       = CreateButton("[ ESP : OFF ]", UDim2.new(0.02, 0, 0.36, 0))
+local GrabGunBtn   = CreateButton("[ AUTO GRAB GUN ]", UDim2.new(0.02, 0, 0.44, 0))
+local LockBtn      = CreateButton("[ LOCK : OFF ]", UDim2.new(0.02, 0, 0.52, 0))
 
 -- ==================== DÉTECTION RÔLE ====================
 local function GetRole(player)
     if not player or not player.Character then return "Innocent" end
-
     local char = player.Character
     local backpack = player:FindFirstChild("Backpack")
 
@@ -86,60 +93,44 @@ local function GetRole(player)
 end
 
 local function GetMurderer()
-    for _, player in pairs(Players:GetPlayers()) do
-        if GetRole(player) == "Murderer" then
-            return player
+    for _, plr in pairs(Players:GetPlayers()) do
+        if GetRole(plr) == "Murderer" then
+            return plr
         end
     end
     return nil
 end
 
--- ==================== AUTO SHOOT ====================
-local function AutoShoot()
-    if GetRole(LocalPlayer) ~= "Sheriff" then
-        AutoShootBtn.Text = "PAS SHERIFF !"
-        task.delay(1, function()
-            AutoShootBtn.Text = "AUTO SHOOT"
-        end)
-        return
-    end
+-- ==================== AUTO SHOOT (Toggle automatique) ====================
+local lastShoot = 0
+
+local function AutoShootLoop()
+    if not AutoShootEnabled then return end
+    if GetRole(LocalPlayer) ~= "Sheriff" then return end
 
     local murder = GetMurderer()
-    if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then
-        AutoShootBtn.Text = "PAS DE MURDER"
-        task.delay(1, function()
-            AutoShootBtn.Text = "AUTO SHOOT"
-        end)
-        return
-    end
+    if not murder or not murder.Character or not murder.Character:FindFirstChild("HumanoidRootPart") then return end
 
     local character = LocalPlayer.Character
     if not character then return end
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local gun = character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
-
     if not gun or not humanoid then return end
 
-    -- Vise le Murder
+    -- Cooldown pour éviter le spam trop rapide
+    if tick() - lastShoot < 0.45 then return end
+
+    -- Vise
     Camera.CFrame = CFrame.new(Camera.CFrame.Position, murder.Character.HumanoidRootPart.Position)
 
-    -- Équipe le gun
     if gun.Parent ~= character then
         humanoid:EquipTool(gun)
-        task.wait(0.08)
+        task.wait(0.05)
     end
 
-    -- Tire
     gun:Activate()
-
-    -- Feedback
-    AutoShootBtn.Text = "SHOT !"
-    AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 0)
-    task.delay(0.6, function()
-        AutoShootBtn.Text = "AUTO SHOOT"
-        AutoShootBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-    end)
+    lastShoot = tick()
 end
 
 -- ==================== ESP ====================
@@ -148,12 +139,12 @@ local function UpdateESP()
         if player == LocalPlayer or not player.Character then continue end
 
         local role = GetRole(player)
-        local color = Color3.fromRGB(40, 255, 90) -- Vert (Innocent)
+        local color = Color3.fromRGB(40, 255, 90) -- Vert
 
         if role == "Murderer" then
-            color = Color3.fromRGB(255, 40, 40) -- Rouge
+            color = Color3.fromRGB(255, 40, 40)
         elseif role == "Sheriff" then
-            color = Color3.fromRGB(40, 110, 255) -- Bleu
+            color = Color3.fromRGB(40, 130, 255)
         end
 
         local highlight = player.Character:FindFirstChild("RoleESP")
@@ -161,7 +152,7 @@ local function UpdateESP()
             highlight = Instance.new("Highlight")
             highlight.Name = "RoleESP"
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.FillTransparency = 0.45
+            highlight.FillTransparency = 0.42
             highlight.OutlineTransparency = 0
             highlight.Parent = player.Character
         end
@@ -176,33 +167,101 @@ local function ClearESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player.Character then
             local hl = player.Character:FindFirstChild("RoleESP")
-            if hl then
-                hl:Destroy()
-            end
+            if hl then hl:Destroy() end
         end
     end
 end
 
--- ==================== CONNEXIONS ====================
-AutoShootBtn.MouseButton1Click:Connect(AutoShoot)
+-- ==================== AUTO GRAB GUN (sans TP) ====================
+local function AutoGrabGun()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not root then return end
 
-ESPBtn.MouseButton1Click:Connect(function()
-    ESPEnabled = not ESPEnabled
+    -- Cherche le Gun droppé dans le workspace
+    local closestGun = nil
+    local shortest = math.huge
 
-    if ESPEnabled then
-        if Connections.ESP then Connections.ESP:Disconnect() end
-        Connections.ESP = RunService.RenderStepped:Connect(UpdateESP)
-        ESPBtn.Text = "ESP : ON"
-        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 130)
-    else
-        if Connections.ESP then
-            Connections.ESP:Disconnect()
-            Connections.ESP = nil
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Tool") and obj.Name == "Gun" and obj:FindFirstChild("Handle") then
+            local dist = (root.Position - obj.Handle.Position).Magnitude
+            if dist < shortest then
+                shortest = dist
+                closestGun = obj
+            end
         end
-        ClearESP()
-        ESPBtn.Text = "ESP : OFF"
-        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+    end
+
+    if not closestGun then
+        GrabGunBtn.Text = "[ NO GUN FOUND ]"
+        task.delay(1.2, function()
+            GrabGunBtn.Text = "[ AUTO GRAB GUN ]"
+        end)
+        return
+    end
+
+    GrabGunBtn.Text = "[ WALKING... ]"
+
+    -- Marche vers le Gun (pas de TP)
+    humanoid:MoveTo(closestGun.Handle.Position)
+
+    -- Petit suivi pendant 6 secondes max
+    local start = tick()
+    while tick() - start < 6 do
+        if not closestGun or not closestGun.Parent then break end
+        if (root.Position - closestGun.Handle.Position).Magnitude < 6 then
+            break
+        end
+        humanoid:MoveTo(closestGun.Handle.Position)
+        task.wait(0.3)
+    end
+
+    GrabGunBtn.Text = "[ AUTO GRAB GUN ]"
+end
+
+-- ==================== CONNEXIONS ====================
+AutoShootBtn.MouseButton1Click:Connect(function()
+    AutoShootEnabled = not AutoShootEnabled
+    if AutoShootEnabled then
+        if Connections.AutoShoot then Connections.AutoShoot:Disconnect() end
+        Connections.AutoShoot = RunService.Heartbeat:Connect(AutoShootLoop)
+        AutoShootBtn.Text = "[ AUTO SHOOT : ON ]"
+        AutoShootBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    else
+        if Connections.AutoShoot then Connections.AutoShoot:Disconnect() end
+        AutoShootBtn.Text = "[ AUTO SHOOT ]"
+        AutoShootBtn.TextColor3 = Color3.fromRGB(0, 255, 170)
     end
 end)
 
-print("✅ Script MM2 chargé correctement")
+ESPBtn.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    if ESPEnabled then
+        if Connections.ESP then Connections.ESP:Disconnect() end
+        Connections.ESP = RunService.RenderStepped:Connect(UpdateESP)
+        ESPBtn.Text = "[ ESP : ON ]"
+        ESPBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        if Connections.ESP then Connections.ESP:Disconnect() end
+        ClearESP()
+        ESPBtn.Text = "[ ESP : OFF ]"
+        ESPBtn.TextColor3 = Color3.fromRGB(0, 255, 170)
+    end
+end)
+
+GrabGunBtn.MouseButton1Click:Connect(AutoGrabGun)
+
+LockBtn.MouseButton1Click:Connect(function()
+    Locked = not Locked
+    if Locked then
+        LockBtn.Text = "[ LOCK : ON ]"
+        LockBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+    else
+        LockBtn.Text = "[ LOCK : OFF ]"
+        LockBtn.TextColor3 = Color3.fromRGB(0, 255, 170)
+    end
+end)
+
+print("✅ MM2 Hacker Script chargé")
